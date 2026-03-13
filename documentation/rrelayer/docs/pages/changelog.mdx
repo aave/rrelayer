@@ -6,6 +6,9 @@
 
 ### Features
 
+- feat: all third-party signing provider integrations are now behind cargo feature flags (all enabled by default). Available features: `gcp`, `aws`, `privy`, `turnkey`, `pkcs11`, `fireblocks`. Disable unneeded providers with `--no-default-features` to reduce compile time and binary size.
+- chore: removed unused `hmac` and `rsa` dependencies.
+
 ---
 
 ### Bug fixes
