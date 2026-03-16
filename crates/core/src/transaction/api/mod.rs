@@ -27,27 +27,27 @@ pub use types::TransactionSpeed;
 pub fn create_transactions_routes() -> Router<Arc<AppState>> {
     // All transaction routes handle authentication internally via validate_allowed_passed_basic_auth + validate_auth_basic_or_api_key
     Router::new()
-        .route("/hash/:tx_hash", get(get_transaction_by_tx_hash::get_transaction_by_tx_hash_api))
+        .route("/hash/{tx_hash}", get(get_transaction_by_tx_hash::get_transaction_by_tx_hash_api))
         .route(
-            "/external/:external_id",
+            "/external/{external_id}",
             get(get_transaction_by_external_id::get_transaction_by_external_id_api),
         )
-        .route("/:id", get(get_transaction_by_id::get_transaction_by_id_api))
-        .route("/status/:id", get(get_transaction_status::get_transaction_status))
-        .route("/relayers/:relayer_id/send", post(send_transaction::handle_send_transaction))
+        .route("/{id}", get(get_transaction_by_id::get_transaction_by_id_api))
+        .route("/status/{id}", get(get_transaction_status::get_transaction_status))
+        .route("/relayers/{relayer_id}/send", post(send_transaction::handle_send_transaction))
         .route(
-            "/relayers/:chain_id/send-random",
+            "/relayers/{chain_id}/send-random",
             post(send_random_transaction::send_transaction_random),
         )
-        .route("/replace/:transaction_id", put(replace_transaction::replace_transaction))
-        .route("/cancel/:transaction_id", put(cancel_transaction::cancel_transaction))
-        .route("/relayers/:relayer_id", get(get_relayer_transactions::get_relayer_transactions))
+        .route("/replace/{transaction_id}", put(replace_transaction::replace_transaction))
+        .route("/cancel/{transaction_id}", put(cancel_transaction::cancel_transaction))
+        .route("/relayers/{relayer_id}", get(get_relayer_transactions::get_relayer_transactions))
         .route(
-            "/relayers/:relayer_id/pending/count",
+            "/relayers/{relayer_id}/pending/count",
             get(get_transactions_pending_count::get_transactions_pending_count),
         )
         .route(
-            "/relayers/:relayer_id/inmempool/count",
+            "/relayers/{relayer_id}/inmempool/count",
             get(get_transactions_inmempool_count::get_transactions_inmempool_count),
         )
 }
