@@ -283,7 +283,8 @@ impl TransactionsQueues {
             && transaction.external_id == transaction_to_send.external_id
     }
 
-    /// Resolves a prior idempotent result; accepted transactions with hashes always win.
+    /// Resolves a prior idempotent result. Exact retries return the original transaction;
+    /// reused external ids with different payloads are conflicts.
     fn resolve_idempotent_transaction(
         transaction: Transaction,
         relayer_id: &RelayerId,
@@ -293,24 +294,15 @@ impl TransactionsQueues {
         let payload_matches =
             Self::transaction_matches_payload(&transaction, relayer_id, transaction_to_send);
 
-        if transaction.known_transaction_hash.is_some() {
-            if !payload_matches {
-                warn!(
-                    %relayer_id,
-                    external_id,
-                    transaction_id = %transaction.id,
-                    "External id reused with different payload; returning existing accepted transaction"
-                );
-            }
-
-            return Ok(transaction);
-        }
-
         if !payload_matches {
             return Err(AddTransactionError::ExternalIdPayloadMismatch {
                 relayer_id: *relayer_id,
                 external_id: external_id.to_string(),
             });
+        }
+
+        if transaction.known_transaction_hash.is_some() {
+            return Ok(transaction);
         }
 
         Err(AddTransactionError::IdempotentTransactionFailed {
@@ -2139,7 +2131,7 @@ mod tests {
     }
 
     #[test]
-    fn idempotent_resolve_returns_accepted_transaction_with_payload_mismatch() {
+    fn idempotent_resolve_rejects_payload_mismatch_with_hash() {
         let relayer_id = RelayerId::new();
         let mut transaction = transaction_with_nonce(TransactionStatus::PENDING, 1);
         transaction.relayer_id = relayer_id;
@@ -2150,16 +2142,17 @@ mod tests {
         let mut transaction_to_send = to_transaction_to_send(&transaction);
         transaction_to_send.value = TransactionValue::new(U256::from(1_u128));
 
-        let resolved = TransactionsQueues::resolve_idempotent_transaction(
-            transaction.clone(),
+        let result = TransactionsQueues::resolve_idempotent_transaction(
+            transaction,
             &relayer_id,
             &transaction_to_send,
             "idempotent-key",
-        )
-        .unwrap();
+        );
 
-        assert_eq!(resolved.id, transaction.id);
-        assert_eq!(resolved.known_transaction_hash, Some(transaction_hash));
+        assert!(matches!(
+            result,
+            Err(super::AddTransactionError::ExternalIdPayloadMismatch { .. })
+        ));
     }
 
     #[test]
