@@ -1,0 +1,14 @@
+crates/core/src/startup.rs
+  h_acf49fd08c8362 188
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.4",
+  "base_commit_sha": "3dd2b706e6a90a02b9f4ed3b6d055ae32ea460ad",
+  "prompts": {},
+  "humans": {
+    "h_acf49fd08c8362": {
+      "author": "Alpay Aldemir <aldemir.alpay@gmail.com>"
+    }
+  }
+}
