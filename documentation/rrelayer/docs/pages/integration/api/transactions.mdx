@@ -49,6 +49,17 @@ POST /transactions/relayers/{relayer_id}/send
 }
 ```
 
+### Error Responses
+
+| Status Code | Description                                                                 |
+| ----------- | --------------------------------------------------------------------------- |
+| `400`       | Invalid transaction payload, unsupported transaction type, or failed simulation |
+| `401`       | Authentication required or relayer permissions denied                       |
+| `403`       | Relayer is paused                                                           |
+| `404`       | Relayer does not exist                                                      |
+| `409`       | `externalId` has already been used for this relayer with a different payload |
+| `429`       | Transaction rate limit exceeded                                             |
+
 ### Example
 
 ```bash
@@ -126,7 +137,9 @@ Same format as regular send transaction:
 | ----------- | ----------------------------------------------------------------- |
 | `400`       | No available relayers for the chain (all paused or internal-only) |
 | `404`       | No relayers found for the specified chain                         |
-| `401`       | Authentication required (Basic auth only)                         |
+| `401`       | Authentication required or selected relayer API key invalid       |
+| `409`       | `externalId` has already been used for the selected relayer with a different payload |
+| `429`       | Transaction rate limit exceeded                                   |
 
 ### Example
 
