@@ -13,9 +13,24 @@ use tokio_postgres::types::{FromSql, IsNull, ToSql, Type};
 #[derive(Debug, Copy, Clone, Serialize, Deserialize, Eq)]
 pub struct GasLimit(u128);
 
+/// Default temporary gas limit used for gas estimation when no real limit is known yet.
+const DEFAULT_TEMP_GAS_LIMIT: u128 = 10_000_000;
+
 impl GasLimit {
     pub fn new(gas_limit: u128) -> Self {
         GasLimit(gas_limit)
+    }
+
+    /// Returns the temporary gas limit used as an upper bound during gas estimation.
+    ///
+    /// Reads `RRELAYER_TEMP_GAS_LIMIT` from the environment, falling back to
+    /// [`DEFAULT_TEMP_GAS_LIMIT`] (10,000,000) when it is unset or invalid.
+    pub fn temp_for_estimation() -> Self {
+        let value = std::env::var("RRELAYER_TEMP_GAS_LIMIT")
+            .ok()
+            .and_then(|raw| raw.parse::<u128>().ok())
+            .unwrap_or(DEFAULT_TEMP_GAS_LIMIT);
+        GasLimit(value)
     }
 
     pub fn into_inner(self) -> u128 {

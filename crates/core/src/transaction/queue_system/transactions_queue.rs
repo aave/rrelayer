@@ -1172,7 +1172,7 @@ impl TransactionsQueue {
         }
 
         // Estimate gas limit by creating a temporary transaction with a high gas limit to avoid failing the estimate
-        let temp_gas_limit = GasLimit::new(10_000_000);
+        let temp_gas_limit = GasLimit::temp_for_estimation();
 
         let temp_transaction_request = if working_transaction.is_blob_transaction() {
             info!(
