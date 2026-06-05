@@ -1171,8 +1171,9 @@ impl TransactionsQueue {
             working_transaction.value = TransactionValue::zero();
         }
 
-        // Estimate gas limit by creating a temporary transaction with a high gas limit to avoid failing the estimate
-        let temp_gas_limit = GasLimit::temp_for_estimation();
+        // Build a temporary transaction for gas estimation. The gas limit here is a
+        // placeholder only — `estimate_gas` omits it so the node uses the block gas limit.
+        let temp_gas_limit = GasLimit::new(0);
 
         let temp_transaction_request = if working_transaction.is_blob_transaction() {
             info!(

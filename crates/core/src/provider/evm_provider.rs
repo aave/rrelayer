@@ -438,6 +438,9 @@ impl EvmProvider {
         let mut request: TransactionRequest = transaction.clone().into();
         // need from here else it will fail gas estimating
         request.from = Some(from.into_address());
+        // Omit the gas limit so the node uses the block gas limit as the estimation
+        // ceiling. Passing a fixed cap risks failing the estimate for heavy transactions.
+        request.gas = None;
 
         let request_with_other = WithOtherFields::new(request);
 
