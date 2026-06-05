@@ -1,0 +1,28 @@
+crates/core/src/transaction/queue_system/transactions_queue.rs
+  s_5893c5acbd2cdc::t_9c5d9437d60e16 1175
+crates/core/src/gas/types/gas_limit.rs
+  s_5893c5acbd2cdc::t_eb3d6a47bc6451 16-18,24-33
+crates/core/src/transaction/queue_system/transactions_queues.rs
+  s_5893c5acbd2cdc::t_07c253da5a37ad 527
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.3",
+  "base_commit_sha": "b17b61cea80f87bb69608b91b0c79639058c88eb",
+  "prompts": {},
+  "humans": {
+    "h_acf49fd08c8362": {
+      "author": "Alpay Aldemir <aldemir.alpay@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_5893c5acbd2cdc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "20bf145f-b920-4df3-8fcd-f325df453c32",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Alpay Aldemir <aldemir.alpay@gmail.com>"
+    }
+  }
+}
