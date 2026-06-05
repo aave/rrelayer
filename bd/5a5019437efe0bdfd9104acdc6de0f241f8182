@@ -1,0 +1,23 @@
+crates/core/src/provider/evm_provider.rs
+  s_5893c5acbd2cdc::t_82a2ea8ce6f2de 441-443
+crates/core/src/transaction/queue_system/transactions_queue.rs
+  s_5893c5acbd2cdc::t_0560225828f8a7 1174-1176
+crates/core/src/transaction/queue_system/transactions_queues.rs
+  s_5893c5acbd2cdc::t_5da55a2402bc53 526-528
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.3",
+  "base_commit_sha": "bd5a5019437efe0bdfd9104acdc6de0f241f8182",
+  "prompts": {},
+  "sessions": {
+    "s_5893c5acbd2cdc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "20bf145f-b920-4df3-8fcd-f325df453c32",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Alpay Aldemir <aldemir.alpay@gmail.com>"
+    }
+  }
+}
