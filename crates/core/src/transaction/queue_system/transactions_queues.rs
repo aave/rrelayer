@@ -523,9 +523,9 @@ impl TransactionsQueues {
         gas_price: &GasPriceResult,
         blob_gas_price: Option<&BlobGasPriceResult>,
     ) -> Result<GasLimit, AddTransactionError> {
-        // Use a reasonable temporary limit for gas estimation
-        const TEMP_GAS_LIMIT: u128 = 1_000_000;
-        let temp_gas_limit = GasLimit::new(TEMP_GAS_LIMIT);
+        // Build a temporary transaction for gas estimation. The gas limit here is a
+        // placeholder only — `estimate_gas` omits it so the node uses the block gas limit.
+        let temp_gas_limit = GasLimit::new(0);
 
         let current_onchain_nonce = transactions_queue.get_nonce().await.map_err(|e| {
             AddTransactionError::CouldNotGetCurrentOnChainNonce(transaction.relayer_id, e)
