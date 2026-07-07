@@ -51,25 +51,24 @@ pub(crate) enum SendErrorClassification {
     AlreadyKnown,
     /// The transaction's nonce was already consumed on-chain.
     NonceConsumed,
+    /// Not a nonce issue or broadcast failure.
     Unrelated,
 }
 
 pub(crate) fn classify_send_error_message(error_msg: &str) -> SendErrorClassification {
-    let error_msg = error_msg.to_lowercase();
+    let msg = error_msg.to_lowercase();
 
-    if error_msg.contains("already known") {
-        return SendErrorClassification::AlreadyKnown;
-    }
-
-    if error_msg.contains("nonce too low")
-        || error_msg.contains("nonce is too low")
-        || error_msg.contains("invalid nonce")
-        || error_msg.contains("nonce has already been used")
+    if msg.contains("already known") {
+        SendErrorClassification::AlreadyKnown
+    } else if msg.contains("nonce too low")
+        || msg.contains("nonce is too low")
+        || msg.contains("invalid nonce")
+        || msg.contains("nonce has already been used")
     {
-        return SendErrorClassification::NonceConsumed;
+        SendErrorClassification::NonceConsumed
+    } else {
+        SendErrorClassification::Unrelated
     }
-
-    SendErrorClassification::Unrelated
 }
 
 pub struct TransactionsQueue {
@@ -1089,12 +1088,18 @@ impl TransactionsQueue {
     /// example when the response is lost and a transport-level retry answers
     /// "nonce too low" because the first broadcast already mined. Blindly treating
     /// such errors as a stale nonce and re-broadcasting the same payload at a
-    /// recovered nonce executes it twice on-chain. Before any nonce recovery may
-    /// run, this checks whether one of our own broadcast hashes consumed the nonce.
-    /// Returns `Ok` with our transaction's hash when the send should be treated as
-    /// successful, `Err(BroadcastInconclusive)` when a receipt lookup failed and
-    /// the send must be retried at the same nonce, and the original error for
-    /// everything else, including a nonce genuinely consumed by an external actor.
+    /// recovered nonce **executes it twice on-chain**.
+    ///
+    /// # Safety Measures
+    ///
+    /// Executing the same transaction twice on chain is a critical security risk
+    /// and should be prevented at all costs, we should ideally lean toward failure
+    /// to send than a double-send risk.
+    ///
+    /// Before any nonce recovery may run, this checks whether one of our own broadcast
+    /// hashes consumed the nonce. Returns `Ok` with our transaction's hash when the
+    /// send should be treated as successful, `Err(BroadcastInconclusive)` when a receipt
+    /// lookup failed and the send must be retried at the same nonce.
     async fn resolve_broadcast_send_error(
         &mut self,
         db: &mut PostgresClient,
@@ -1590,8 +1595,6 @@ mod tests {
 
     #[test]
     fn classify_matches_the_production_nonce_too_low_response() {
-        // the exact shape returned by the rpc node when our own broadcast mined
-        // before the send response came back.
         let error_msg = "Provider error: server returned an error response: error code -32000: \
             nonce too low: address 0x1E5788cd49FCc89645f66B9345ceb7cc430B252e, tx: 32 state: 33";
         assert_eq!(classify_send_error_message(error_msg), SendErrorClassification::NonceConsumed);

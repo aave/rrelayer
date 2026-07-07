@@ -1431,13 +1431,10 @@ impl TransactionsQueues {
                                             error,
                                         ),
                                     ))
-                                // "already known" deliberately does not land here: it means this
-                                // exact payload is already in the mempool and the send layer
-                                // resolves it as a success. re-assigning it a new nonce below
-                                // would broadcast the payload twice. nonce errors only reach
-                                // this branch after the send layer confirmed none of our own
-                                // broadcast hashes mined, so the nonce was consumed externally
-                                // and re-sending at a recovered nonce is safe.
+                                // already known deliberately means this exact payload is already
+                                // in the mempool and the send layer resolves it as a success.
+                                //
+                                // re-assigning a new nonce below could broadcast payload twice.
                                 } else if classify_send_error_message(&error_msg)
                                     == SendErrorClassification::NonceConsumed
                                 {

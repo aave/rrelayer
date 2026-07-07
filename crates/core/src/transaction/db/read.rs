@@ -111,11 +111,11 @@ impl PostgresClient {
     ) -> Result<Vec<TransactionHash>, PostgresError> {
         let rows = self
             .query(
-                "
-                    SELECT DISTINCT hash
-                    FROM relayer.transaction_audit_log
-                    WHERE id = $1 AND hash IS NOT NULL;
-                ",
+                r#"
+                SELECT DISTINCT hash
+                FROM relayer.transaction_audit_log
+                WHERE id = $1 AND hash IS NOT NULL;
+                "#,
                 &[transaction_id],
             )
             .await?;

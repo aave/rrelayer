@@ -509,25 +509,23 @@ impl PostgresClient {
             )
             .await?;
 
-        // the audit row makes every broadcast attempt hash durable, which is what
-        // lets a later nonce-error reconciliation find any prior attempt on-chain.
         trans
             .execute(
-                "
-                    INSERT INTO relayer.transaction_audit_log (
-                        id, relayer_id, \"to\", \"from\", nonce, chain_id, data, value, blobs, gas_limit,
-                        speed, status, expires_at, queued_at, sent_at, mined_at, confirmed_at,
-                        failed_at, failed_reason, hash, sent_max_priority_fee_per_gas,
-                        sent_max_fee_per_gas, gas_price, block_hash, block_number, external_id
-                    )
-                    SELECT
-                        id, relayer_id, \"to\", \"from\", nonce, chain_id, data, value, blobs, gas_limit,
-                        speed, status, expires_at, queued_at, sent_at, mined_at, confirmed_at,
-                        failed_at, failed_reason, $2, sent_max_priority_fee_per_gas,
-                        sent_max_fee_per_gas, gas_price, block_hash, block_number, external_id
-                    FROM relayer.transaction
-                    WHERE id = $1;
-                ",
+                r#"
+                INSERT INTO relayer.transaction_audit_log (
+                    id, relayer_id, "to", "from", nonce, chain_id, data, value, blobs, gas_limit,
+                    speed, status, expires_at, queued_at, sent_at, mined_at, confirmed_at,
+                    failed_at, failed_reason, hash, sent_max_priority_fee_per_gas,
+                    sent_max_fee_per_gas, gas_price, block_hash, block_number, external_id
+                )
+                SELECT
+                    id, relayer_id, "to", "from", nonce, chain_id, data, value, blobs, gas_limit,
+                    speed, status, expires_at, queued_at, sent_at, mined_at, confirmed_at,
+                    failed_at, failed_reason, $2, sent_max_priority_fee_per_gas,
+                    sent_max_fee_per_gas, gas_price, block_hash, block_number, external_id
+                FROM relayer.transaction
+                WHERE id = $1;
+                "#,
                 &[&transaction_id, &hash],
             )
             .await?;
