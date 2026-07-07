@@ -372,18 +372,32 @@ impl EvmProvider {
     /// Signs the transaction and returns the exact hash and raw bytes that will be
     /// broadcast.
     ///
-    /// # Why
-    ///
     /// Signing is not deterministic for every wallet backend, so a hash computed
     /// from a separate signing pass does not match the transaction that is actually
     /// broadcast. Callers must obtain the hash from the same signature as the raw
     /// bytes, and must obtain it before broadcasting so the transaction can still be
     /// found on-chain when the send response is lost or errors.
+    ///
+    /// # Examples
+    ///
+    /// Record the hash durably before handing the bytes to
+    /// [`Self::broadcast_signed_transaction`], so a lost send response can be
+    /// reconciled against the chain instead of re-broadcast:
+    ///
+    /// ```ignore
+    /// let (hash, raw_transaction) =
+    ///     evm_provider.sign_transaction_for_broadcast(&relayer, transaction_request).await?;
+    ///
+    /// db.transaction_update_known_hash(&transaction_id, &hash).await?;
+    ///
+    /// let sent_hash = evm_provider.broadcast_signed_transaction(&raw_transaction).await?;
+    /// assert_eq!(sent_hash, hash);
+    /// ```
     pub async fn sign_transaction_for_broadcast(
         &self,
         relayer: &Relayer,
         transaction: TypedTransaction,
-    ) -> Result<(TransactionHash, Vec<u8>), SendTransactionError> {
+    ) -> Result<(TransactionHash, Vec<u8>), WalletError> {
         let signature = self
             .wallet_manager
             .sign_transaction(
@@ -391,8 +405,7 @@ impl EvmProvider {
                 &transaction,
                 relayer.wallet_manager_chain_id(),
             )
-            .await
-            .map_err(|e| SendTransactionError::InternalError(e.to_string()))?;
+            .await?;
 
         let tx_envelope = match transaction {
             TypedTransaction::Legacy(tx) => TxEnvelope::Legacy(tx.into_signed(signature)),
@@ -408,6 +421,11 @@ impl EvmProvider {
 
     /// Broadcasts raw signed transaction bytes produced by
     /// [`Self::sign_transaction_for_broadcast`].
+    ///
+    /// The returned hash always equals the one from signing. An error does not
+    /// mean the transaction failed to reach the network: the node may have
+    /// accepted it while the response was lost, so callers must reconcile
+    /// nonce-related errors against the signing hash before retrying.
     pub async fn broadcast_signed_transaction(
         &self,
         raw_transaction: &[u8],
@@ -417,17 +435,6 @@ impl EvmProvider {
         let receipt = provider.send_raw_transaction(raw_transaction).await?;
 
         Ok(TransactionHash::from_alloy_hash(receipt.tx_hash()))
-    }
-
-    pub async fn send_transaction(
-        &self,
-        relayer: &Relayer,
-        transaction: TypedTransaction,
-    ) -> Result<TransactionHash, SendTransactionError> {
-        let (_, raw_transaction) =
-            self.sign_transaction_for_broadcast(relayer, transaction).await?;
-
-        self.broadcast_signed_transaction(&raw_transaction).await
     }
 
     pub async fn sign_transaction(

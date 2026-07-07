@@ -83,6 +83,46 @@ impl PostgresClient {
         Ok(PagingResult::new(results, paging_context.next(result_count), paging_context.previous()))
     }
 
+    /// Returns every distinct hash this transaction has ever been broadcast (or
+    /// prepared for broadcast) with, from the audit log.
+    ///
+    /// Gas bumps and send retries re-sign the same payload, so a transaction can
+    /// have one hash per attempt and any of them may be the one that mined.
+    ///
+    /// # Examples
+    ///
+    /// Find which attempt of a transaction actually landed on-chain:
+    ///
+    /// ```no_run
+    /// use rrelayer_core::PostgresClient;
+    /// use rrelayer_core::transaction::types::{TransactionHash, TransactionId};
+    ///
+    /// async fn candidate_hashes(
+    ///     db: &PostgresClient,
+    ///     transaction_id: &TransactionId,
+    /// ) -> Result<Vec<TransactionHash>, Box<dyn std::error::Error>> {
+    ///     let attempts = db.transaction_attempt_hashes(transaction_id).await?;
+    ///     Ok(attempts)
+    /// }
+    /// ```
+    pub async fn transaction_attempt_hashes(
+        &self,
+        transaction_id: &TransactionId,
+    ) -> Result<Vec<TransactionHash>, PostgresError> {
+        let rows = self
+            .query(
+                "
+                    SELECT DISTINCT hash
+                    FROM relayer.transaction_audit_log
+                    WHERE id = $1 AND hash IS NOT NULL;
+                ",
+                &[transaction_id],
+            )
+            .await?;
+
+        Ok(rows.iter().map(|row| row.get("hash")).collect())
+    }
+
     pub async fn get_transaction_by_hash(
         &self,
         hash: &TransactionHash,

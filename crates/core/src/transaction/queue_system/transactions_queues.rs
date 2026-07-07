@@ -880,12 +880,8 @@ impl TransactionsQueues {
                             Err(TransactionQueueSendTransactionError::TransactionSendError(
                                 error,
                             )) => {
-                                let error_msg = error.to_string().to_lowercase();
-                                if error_msg.contains("nonce too low")
-                                    || error_msg.contains("nonce is too low")
-                                    || error_msg.contains("invalid nonce")
-                                    || error_msg.contains("nonce has already been used")
-                                    || error_msg.contains("already known")
+                                if classify_send_error_message(&error.to_string())
+                                    == SendErrorClassification::NonceConsumed
                                 {
                                     warn!("cancel_transaction: nonce synchronization issue detected for relayer {}: {}", transaction.relayer_id, error);
 
@@ -1169,12 +1165,8 @@ impl TransactionsQueues {
                             Err(TransactionQueueSendTransactionError::TransactionSendError(
                                 error,
                             )) => {
-                                let error_msg = error.to_string().to_lowercase();
-                                if error_msg.contains("nonce too low")
-                                    || error_msg.contains("nonce is too low")
-                                    || error_msg.contains("invalid nonce")
-                                    || error_msg.contains("nonce has already been used")
-                                    || error_msg.contains("already known")
+                                if classify_send_error_message(&error.to_string())
+                                    == SendErrorClassification::NonceConsumed
                                 {
                                     warn!("replace_transaction: nonce synchronization issue detected for relayer {}: {}", transaction.relayer_id, error);
 
@@ -1516,6 +1508,23 @@ impl TransactionsQueues {
                                     TransactionQueueSendTransactionError::CouldNotUpdateTransactionDb(error),
                                 ))
                             }
+                            TransactionQueueSendTransactionError::BroadcastInconclusive {
+                                hash,
+                                reason,
+                            } => {
+                                // our own broadcast may already be on-chain but the receipt
+                                // lookup failed, so keep the transaction pending and retry at
+                                // the same nonce. re-noncing here could double-send it.
+                                warn!("process_single_pending: broadcast outcome unknown for transaction {} (hash {}), will retry at the same nonce: {}", transaction.id, hash, reason);
+                                Err(ProcessPendingTransactionError::SendTransactionError(
+                                    *relayer_id,
+                                    relayer_address,
+                                    TransactionQueueSendTransactionError::BroadcastInconclusive {
+                                        hash,
+                                        reason,
+                                    },
+                                ))
+                            }
                             TransactionQueueSendTransactionError::SendTransactionGasPriceError(
                                 error,
                             ) => {
@@ -1750,12 +1759,8 @@ impl TransactionsQueues {
                                     {
                                         Ok(tx_sent) => tx_sent,
                                         Err(TransactionQueueSendTransactionError::TransactionSendError(error)) => {
-                                            let error_msg = error.to_string().to_lowercase();
-                                            if error_msg.contains("nonce too low")
-                                                || error_msg.contains("nonce is too low")
-                                                || error_msg.contains("invalid nonce")
-                                                || error_msg.contains("nonce has already been used")
-                                                || error_msg.contains("already known")
+                                            if classify_send_error_message(&error.to_string())
+                                                == SendErrorClassification::NonceConsumed
                                             {
                                                 warn!("process_single_inmempool: nonce synchronization issue detected for relayer {} during gas bump: {}", relayer_id, error);
 

@@ -31,7 +31,7 @@ use crate::{
 };
 use alloy::network::{AnyTransactionReceipt, ReceiptResponse};
 use alloy::{
-    consensus::{SignableTransaction, TypedTransaction},
+    consensus::TypedTransaction,
     hex,
     transports::{RpcError, TransportErrorKind},
 };
@@ -70,21 +70,6 @@ pub(crate) fn classify_send_error_message(error_msg: &str) -> SendErrorClassific
     }
 
     SendErrorClassification::Unrelated
-}
-
-/// Outcome of checking whether a failed broadcast actually means our own
-/// transaction was already accepted or mined.
-enum BroadcastErrorResolution {
-    /// The nonce was consumed by our own transaction with this hash, so the send
-    /// must be treated as successful instead of re-broadcast.
-    OwnTransaction(TransactionHash),
-    /// The check itself failed, so it is unknown whether the nonce was consumed by
-    /// us. The send must be retried later at the same nonce, never re-assigned a
-    /// new one.
-    Inconclusive(String),
-    /// The error does not indicate our own transaction landed, hand it back to the
-    /// caller unchanged.
-    PropagateOriginal,
 }
 
 pub struct TransactionsQueue {
@@ -1038,38 +1023,23 @@ impl TransactionsQueue {
         Ok(blob_gas_price)
     }
 
+    /// Computes a preview hash for the transaction by signing it.
+    ///
+    /// Signing is not deterministic for every wallet backend, so this hash is
+    /// only a preview: the broadcast records the authoritative hash from the
+    /// signature it actually sends. TODO: if the send API allows returning a
+    /// nullable hash, this extra queue-time signing pass can be dropped.
     pub async fn compute_tx_hash(
         &self,
         transaction: &TypedTransaction,
     ) -> Result<TransactionHash, WalletError> {
         info!("Computing transaction hash for relayer: {}", self.relayer.name);
 
-        let signature = self.evm_provider.sign_transaction(&self.relayer, transaction).await?;
+        let (tx_hash, _) = self
+            .evm_provider
+            .sign_transaction_for_broadcast(&self.relayer, transaction.clone())
+            .await?;
 
-        let hash = match transaction {
-            TypedTransaction::Legacy(tx) => {
-                let signed = tx.clone().into_signed(signature);
-                *signed.hash()
-            }
-            TypedTransaction::Eip2930(tx) => {
-                let signed = tx.clone().into_signed(signature);
-                *signed.hash()
-            }
-            TypedTransaction::Eip1559(tx) => {
-                let signed = tx.clone().into_signed(signature);
-                *signed.hash()
-            }
-            TypedTransaction::Eip4844(tx) => {
-                let signed = tx.clone().into_signed(signature);
-                *signed.hash()
-            }
-            TypedTransaction::Eip7702(tx) => {
-                let signed = tx.clone().into_signed(signature);
-                *signed.hash()
-            }
-        };
-
-        let tx_hash = TransactionHash::from_alloy_hash(&hash);
         info!("Computed transaction hash {} for relayer: {}", tx_hash, self.relayer.name);
         Ok(tx_hash)
     }
@@ -1115,63 +1085,84 @@ impl TransactionsQueue {
     /// Resolves a broadcast error that may actually mean our own transaction was
     /// already accepted or mined.
     ///
-    /// # Why
-    ///
     /// A transaction can reach the network even though the send call errors, for
     /// example when the response is lost and a transport-level retry answers
     /// "nonce too low" because the first broadcast already mined. Blindly treating
     /// such errors as a stale nonce and re-broadcasting the same payload at a
     /// recovered nonce executes it twice on-chain. Before any nonce recovery may
     /// run, this checks whether one of our own broadcast hashes consumed the nonce.
+    /// Returns `Ok` with our transaction's hash when the send should be treated as
+    /// successful, `Err(BroadcastInconclusive)` when a receipt lookup failed and
+    /// the send must be retried at the same nonce, and the original error for
+    /// everything else, including a nonce genuinely consumed by an external actor.
     async fn resolve_broadcast_send_error(
-        &self,
-        error: &SendTransactionError,
+        &mut self,
+        db: &mut PostgresClient,
+        error: SendTransactionError,
+        transaction_id: &TransactionId,
         attempt_hash: TransactionHash,
         previous_attempt_hash: Option<TransactionHash>,
-    ) -> BroadcastErrorResolution {
+    ) -> Result<TransactionHash, TransactionQueueSendTransactionError> {
         match classify_send_error_message(&error.to_string()) {
             SendErrorClassification::AlreadyKnown => {
-                // this exact signed payload is in the mempool.
                 info!(
                     "Broadcast of transaction hash {} reported already known, treating as sent for relayer: {}",
                     attempt_hash, self.relayer.name
                 );
-                return BroadcastErrorResolution::OwnTransaction(attempt_hash);
+                return Ok(attempt_hash);
             }
             SendErrorClassification::NonceConsumed => {}
             SendErrorClassification::Unrelated => {
-                return BroadcastErrorResolution::PropagateOriginal;
+                return Err(TransactionQueueSendTransactionError::TransactionSendError(error));
             }
         }
 
-        for hash in std::iter::once(attempt_hash).chain(previous_attempt_hash) {
-            match self.evm_provider.get_receipt(&hash).await {
+        // every broadcast attempt of this transaction is a candidate for having
+        // consumed the nonce, not just the latest two: a gas bump or send retry
+        // re-signs the same payload, and any earlier attempt may be the one that
+        // mined. the audit log records the hash of each attempt.
+        let mut candidate_hashes = vec![attempt_hash];
+        candidate_hashes.extend(previous_attempt_hash);
+        match db.transaction_attempt_hashes(transaction_id).await {
+            Ok(audit_hashes) => {
+                for hash in audit_hashes {
+                    if !candidate_hashes.contains(&hash) {
+                        candidate_hashes.push(hash);
+                    }
+                }
+            }
+            Err(db_error) => warn!(
+                "Failed to load prior attempt hashes for transaction {} on relayer: {}: {}",
+                transaction_id, self.relayer.name, db_error
+            ),
+        }
+
+        for hash in candidate_hashes {
+            match self.get_receipt(&hash).await {
                 Ok(Some(_)) => {
                     warn!(
                         "Broadcast reported the nonce as consumed but our own transaction {} mined, treating as sent for relayer: {}",
                         hash, self.relayer.name
                     );
-                    return BroadcastErrorResolution::OwnTransaction(hash);
+                    return Ok(hash);
                 }
                 Ok(None) => {}
                 Err(lookup_error) => {
                     // without the receipt it is unknown whether we consumed the
-                    // nonce ourselves. the message must not contain any of the
-                    // matched nonce phrases, otherwise the caller's recovery path
-                    // would re-assign a new nonce and double-send.
+                    // nonce ourselves, so the caller must retry at the same nonce.
                     warn!(
                         "Failed to look up receipt for broadcast hash {} while resolving send error on relayer: {}: {}",
                         hash, self.relayer.name, lookup_error
                     );
-                    return BroadcastErrorResolution::Inconclusive(format!(
-                        "unable to confirm whether broadcast hash {} consumed the reported stale sequence, will retry: {}",
-                        hash, lookup_error
-                    ));
+                    return Err(TransactionQueueSendTransactionError::BroadcastInconclusive {
+                        hash,
+                        reason: lookup_error.to_string(),
+                    });
                 }
             }
         }
 
-        BroadcastErrorResolution::PropagateOriginal
+        Err(TransactionQueueSendTransactionError::TransactionSendError(error))
     }
 
     pub async fn send_transaction(
@@ -1431,7 +1422,7 @@ impl TransactionsQueue {
             .evm_provider
             .sign_transaction_for_broadcast(&self.relayer, transaction_request)
             .await
-            .map_err(TransactionQueueSendTransactionError::TransactionSendError)?;
+            .map_err(|e| SendTransactionError::InternalError(e.to_string()))?;
 
         // the stored hash may be from an earlier broadcast attempt of this
         // transaction, which is exactly what a nonce error needs to be checked
@@ -1450,25 +1441,20 @@ impl TransactionsQueue {
             );
         }
 
+        let transaction_id = transaction.id;
         let transaction_hash =
             match self.evm_provider.broadcast_signed_transaction(&raw_transaction).await {
                 Ok(hash) => hash,
-                Err(error) => match self
-                    .resolve_broadcast_send_error(&error, attempt_hash, previous_attempt_hash)
-                    .await
-                {
-                    BroadcastErrorResolution::OwnTransaction(hash) => hash,
-                    BroadcastErrorResolution::Inconclusive(reason) => {
-                        return Err(TransactionQueueSendTransactionError::TransactionSendError(
-                            SendTransactionError::InternalError(reason),
-                        ));
-                    }
-                    BroadcastErrorResolution::PropagateOriginal => {
-                        return Err(TransactionQueueSendTransactionError::TransactionSendError(
-                            error,
-                        ));
-                    }
-                },
+                Err(error) => {
+                    self.resolve_broadcast_send_error(
+                        db,
+                        error,
+                        &transaction_id,
+                        attempt_hash,
+                        previous_attempt_hash,
+                    )
+                    .await?
+                }
             };
 
         let transaction_sent = TransactionSentWithRelayer {
@@ -1617,20 +1603,5 @@ mod tests {
             classify_send_error_message("connection reset by peer"),
             SendErrorClassification::Unrelated
         );
-    }
-
-    #[test]
-    fn inconclusive_reconciliation_reason_never_classifies_as_a_nonce_error() {
-        // the send layer surfaces an inconclusive reconciliation as an internal
-        // error so the transaction stays pending and retries at the same nonce.
-        // if this message ever classified as NonceConsumed, the pending-queue
-        // recovery would re-assign a new nonce and double-send the payload.
-        let reason = format!(
-            "Internal error: unable to confirm whether broadcast hash {} consumed the reported \
-             stale sequence, will retry: {}",
-            "0x3b80d0d97c93a921d744728d22ca8552e86787caf1372a753aa785e471cfa7dc",
-            "transport error: connection timed out"
-        );
-        assert_eq!(classify_send_error_message(&reason), SendErrorClassification::Unrelated);
     }
 }

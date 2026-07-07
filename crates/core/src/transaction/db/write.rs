@@ -471,25 +471,68 @@ impl PostgresClient {
 
     /// Records the hash of the signed payload that is about to be broadcast.
     ///
-    /// # Why
-    ///
     /// The hash stored at queue time comes from a separate signing pass and does
     /// not match the broadcast transaction when signing is non-deterministic.
     /// Persisting the real hash before broadcasting means the transaction can be
     /// found on-chain after a crash or a lost send response, instead of being
-    /// re-broadcast at a new nonce.
+    /// re-broadcast at a new nonce. Each call also appends an audit-log row, so
+    /// the full attempt history stays queryable via
+    /// [`Self::transaction_attempt_hashes`].
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use rrelayer_core::PostgresClient;
+    /// use rrelayer_core::transaction::types::{TransactionHash, TransactionId};
+    ///
+    /// async fn record_broadcast_hash(
+    ///     db: &mut PostgresClient,
+    ///     transaction_id: &TransactionId,
+    ///     broadcast_hash: &TransactionHash,
+    /// ) -> Result<(), Box<dyn std::error::Error>> {
+    ///     db.transaction_update_known_hash(transaction_id, broadcast_hash).await?;
+    ///     Ok(())
+    /// }
+    /// ```
     pub async fn transaction_update_known_hash(
         &mut self,
         transaction_id: &TransactionId,
         hash: &TransactionHash,
     ) -> Result<(), PostgresError> {
-        let conn = self.pool.get().await?;
+        let mut conn = self.pool.get().await?;
+        let trans = conn.transaction().await.map_err(PostgresError::PgError)?;
 
-        conn.execute(
-            "UPDATE relayer.transaction SET hash = $2 WHERE id = $1",
-            &[&transaction_id, &hash],
-        )
-        .await?;
+        trans
+            .execute(
+                "UPDATE relayer.transaction SET hash = $2 WHERE id = $1",
+                &[&transaction_id, &hash],
+            )
+            .await?;
+
+        // the audit row makes every broadcast attempt hash durable, which is what
+        // lets a later nonce-error reconciliation find any prior attempt on-chain.
+        trans
+            .execute(
+                "
+                    INSERT INTO relayer.transaction_audit_log (
+                        id, relayer_id, \"to\", \"from\", nonce, chain_id, data, value, blobs, gas_limit,
+                        speed, status, expires_at, queued_at, sent_at, mined_at, confirmed_at,
+                        failed_at, failed_reason, hash, sent_max_priority_fee_per_gas,
+                        sent_max_fee_per_gas, gas_price, block_hash, block_number, external_id
+                    )
+                    SELECT
+                        id, relayer_id, \"to\", \"from\", nonce, chain_id, data, value, blobs, gas_limit,
+                        speed, status, expires_at, queued_at, sent_at, mined_at, confirmed_at,
+                        failed_at, failed_reason, $2, sent_max_priority_fee_per_gas,
+                        sent_max_fee_per_gas, gas_price, block_hash, block_number, external_id
+                    FROM relayer.transaction
+                    WHERE id = $1;
+                ",
+                &[&transaction_id, &hash],
+            )
+            .await?;
+
+        trans.commit().await?;
 
         Ok(())
     }
