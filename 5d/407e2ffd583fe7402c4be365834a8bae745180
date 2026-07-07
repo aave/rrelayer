@@ -1,0 +1,35 @@
+crates/core/src/provider/evm_provider.rs
+  s_7fcde17cdf4769::t_70d18cac7f11d0 372-382,386,405-414,417,422-431
+  s_7fcde17cdf4769::t_779216cbcde7b6 432
+crates/core/src/transaction/queue_system/transactions_queue.rs
+  s_7fcde17cdf4769::t_0a068175afa41d 42-43,75-88,1592
+  s_7fcde17cdf4769::t_bba6e15b333b47 1115-1131,1145-1176
+  s_7fcde17cdf4769::t_01f32f9f31f753 1132-1144
+  s_7fcde17cdf4769::t_d641742903bb7b 20
+  s_7fcde17cdf4769::t_72cc7bdf371eda 44-74
+  s_7fcde17cdf4769::t_0d0254b5b1e79a 1425-1430,1432,1436-1473
+  s_7fcde17cdf4769::t_0fef9d8db1d101 1567-1576
+  s_7fcde17cdf4769::t_7f4c5d1d40d250 1566,1593-1636
+crates/core/src/transaction/db/write.rs
+  s_7fcde17cdf4769::t_f44e13af8c6d06 472-496
+crates/core/src/transaction/queue_system/transactions_queues.rs
+  s_7fcde17cdf4769::t_8cf869ab64c02f 1442,1449-1450
+  s_7fcde17cdf4769::t_8d556439a6353e 26
+  s_7fcde17cdf4769::t_033637bc9edc0d 1443-1448
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "5d407e2ffd583fe7402c4be365834a8bae745180",
+  "prompts": {},
+  "sessions": {
+    "s_7fcde17cdf4769": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ec481dae-f69a-4574-9e21-0919acd8db70",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Jaggad <jack@turboclicks.com.au>"
+    }
+  }
+}
