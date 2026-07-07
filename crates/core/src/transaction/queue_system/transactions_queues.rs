@@ -23,7 +23,7 @@ pub enum TransactionsQueuesError {
 
 use super::{
     start::spawn_processing_tasks_for_relayer,
-    transactions_queue::TransactionsQueue,
+    transactions_queue::{classify_send_error_message, SendErrorClassification, TransactionsQueue},
     types::{
         AddTransactionError, CancelTransactionError, CancelTransactionResult, CompetitionType,
         CompetitiveTransaction, EditableTransactionType, ProcessInmempoolStatus,
@@ -1439,11 +1439,15 @@ impl TransactionsQueues {
                                             error,
                                         ),
                                     ))
-                                } else if error_msg.contains("nonce too low")
-                                    || error_msg.contains("nonce is too low")
-                                    || error_msg.contains("invalid nonce")
-                                    || error_msg.contains("nonce has already been used")
-                                    || error_msg.contains("already known")
+                                // "already known" deliberately does not land here: it means this
+                                // exact payload is already in the mempool and the send layer
+                                // resolves it as a success. re-assigning it a new nonce below
+                                // would broadcast the payload twice. nonce errors only reach
+                                // this branch after the send layer confirmed none of our own
+                                // broadcast hashes mined, so the nonce was consumed externally
+                                // and re-sending at a recovered nonce is safe.
+                                } else if classify_send_error_message(&error_msg)
+                                    == SendErrorClassification::NonceConsumed
                                 {
                                     warn!("process_single_pending: nonce synchronization issue detected for relayer {}: {}", relayer_id, error);
 

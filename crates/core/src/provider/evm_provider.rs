@@ -369,11 +369,21 @@ impl EvmProvider {
         Ok(TransactionNonce::new(nonce))
     }
 
-    pub async fn send_transaction(
+    /// Signs the transaction and returns the exact hash and raw bytes that will be
+    /// broadcast.
+    ///
+    /// # Why
+    ///
+    /// Signing is not deterministic for every wallet backend, so a hash computed
+    /// from a separate signing pass does not match the transaction that is actually
+    /// broadcast. Callers must obtain the hash from the same signature as the raw
+    /// bytes, and must obtain it before broadcasting so the transaction can still be
+    /// found on-chain when the send response is lost or errors.
+    pub async fn sign_transaction_for_broadcast(
         &self,
         relayer: &Relayer,
         transaction: TypedTransaction,
-    ) -> Result<TransactionHash, SendTransactionError> {
+    ) -> Result<(TransactionHash, Vec<u8>), SendTransactionError> {
         let signature = self
             .wallet_manager
             .sign_transaction(
@@ -392,12 +402,32 @@ impl EvmProvider {
             TypedTransaction::Eip7702(tx) => TxEnvelope::Eip7702(tx.into_signed(signature)),
         };
 
-        let provider = self.rpc_client();
-        let tx_bytes = tx_envelope.encoded_2718();
+        let hash = TransactionHash::from_alloy_hash(tx_envelope.tx_hash());
+        Ok((hash, tx_envelope.encoded_2718()))
+    }
 
-        let receipt = provider.send_raw_transaction(&tx_bytes).await?;
+    /// Broadcasts raw signed transaction bytes produced by
+    /// [`Self::sign_transaction_for_broadcast`].
+    pub async fn broadcast_signed_transaction(
+        &self,
+        raw_transaction: &[u8],
+    ) -> Result<TransactionHash, SendTransactionError> {
+        let provider = self.rpc_client();
+
+        let receipt = provider.send_raw_transaction(raw_transaction).await?;
 
         Ok(TransactionHash::from_alloy_hash(receipt.tx_hash()))
+    }
+
+    pub async fn send_transaction(
+        &self,
+        relayer: &Relayer,
+        transaction: TypedTransaction,
+    ) -> Result<TransactionHash, SendTransactionError> {
+        let (_, raw_transaction) =
+            self.sign_transaction_for_broadcast(relayer, transaction).await?;
+
+        self.broadcast_signed_transaction(&raw_transaction).await
     }
 
     pub async fn sign_transaction(

@@ -17,7 +17,7 @@ use crate::{
     },
     network::ChainId,
     postgres::PostgresClient,
-    provider::EvmProvider,
+    provider::{EvmProvider, SendTransactionError},
     relayer::{Relayer, RelayerId},
     safe_proxy::SafeProxyManager,
     shared::common_types::EvmAddress,
@@ -39,6 +39,53 @@ use chrono::Utc;
 use tokio::sync::Mutex;
 use tracing::error;
 use tracing::info;
+use tracing::warn;
+
+/// Classification of a transaction send error message.
+///
+/// Shared by the send-time broadcast reconciliation and the pending-queue nonce
+/// recovery so the two sites cannot drift apart on which phrases mean what.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum SendErrorClassification {
+    /// This exact signed payload is already in the node's mempool.
+    AlreadyKnown,
+    /// The transaction's nonce was already consumed on-chain.
+    NonceConsumed,
+    Unrelated,
+}
+
+pub(crate) fn classify_send_error_message(error_msg: &str) -> SendErrorClassification {
+    let error_msg = error_msg.to_lowercase();
+
+    if error_msg.contains("already known") {
+        return SendErrorClassification::AlreadyKnown;
+    }
+
+    if error_msg.contains("nonce too low")
+        || error_msg.contains("nonce is too low")
+        || error_msg.contains("invalid nonce")
+        || error_msg.contains("nonce has already been used")
+    {
+        return SendErrorClassification::NonceConsumed;
+    }
+
+    SendErrorClassification::Unrelated
+}
+
+/// Outcome of checking whether a failed broadcast actually means our own
+/// transaction was already accepted or mined.
+enum BroadcastErrorResolution {
+    /// The nonce was consumed by our own transaction with this hash, so the send
+    /// must be treated as successful instead of re-broadcast.
+    OwnTransaction(TransactionHash),
+    /// The check itself failed, so it is unknown whether the nonce was consumed by
+    /// us. The send must be retried later at the same nonce, never re-assigned a
+    /// new one.
+    Inconclusive(String),
+    /// The error does not indicate our own transaction landed, hand it back to the
+    /// caller unchanged.
+    PropagateOriginal,
+}
 
 pub struct TransactionsQueue {
     pending_transactions: Mutex<VecDeque<Transaction>>,
@@ -1065,6 +1112,68 @@ impl TransactionsQueue {
         Ok(estimated_gas_result)
     }
 
+    /// Resolves a broadcast error that may actually mean our own transaction was
+    /// already accepted or mined.
+    ///
+    /// # Why
+    ///
+    /// A transaction can reach the network even though the send call errors, for
+    /// example when the response is lost and a transport-level retry answers
+    /// "nonce too low" because the first broadcast already mined. Blindly treating
+    /// such errors as a stale nonce and re-broadcasting the same payload at a
+    /// recovered nonce executes it twice on-chain. Before any nonce recovery may
+    /// run, this checks whether one of our own broadcast hashes consumed the nonce.
+    async fn resolve_broadcast_send_error(
+        &self,
+        error: &SendTransactionError,
+        attempt_hash: TransactionHash,
+        previous_attempt_hash: Option<TransactionHash>,
+    ) -> BroadcastErrorResolution {
+        match classify_send_error_message(&error.to_string()) {
+            SendErrorClassification::AlreadyKnown => {
+                // this exact signed payload is in the mempool.
+                info!(
+                    "Broadcast of transaction hash {} reported already known, treating as sent for relayer: {}",
+                    attempt_hash, self.relayer.name
+                );
+                return BroadcastErrorResolution::OwnTransaction(attempt_hash);
+            }
+            SendErrorClassification::NonceConsumed => {}
+            SendErrorClassification::Unrelated => {
+                return BroadcastErrorResolution::PropagateOriginal;
+            }
+        }
+
+        for hash in std::iter::once(attempt_hash).chain(previous_attempt_hash) {
+            match self.evm_provider.get_receipt(&hash).await {
+                Ok(Some(_)) => {
+                    warn!(
+                        "Broadcast reported the nonce as consumed but our own transaction {} mined, treating as sent for relayer: {}",
+                        hash, self.relayer.name
+                    );
+                    return BroadcastErrorResolution::OwnTransaction(hash);
+                }
+                Ok(None) => {}
+                Err(lookup_error) => {
+                    // without the receipt it is unknown whether we consumed the
+                    // nonce ourselves. the message must not contain any of the
+                    // matched nonce phrases, otherwise the caller's recovery path
+                    // would re-assign a new nonce and double-send.
+                    warn!(
+                        "Failed to look up receipt for broadcast hash {} while resolving send error on relayer: {}: {}",
+                        hash, self.relayer.name, lookup_error
+                    );
+                    return BroadcastErrorResolution::Inconclusive(format!(
+                        "unable to confirm whether broadcast hash {} consumed the reported stale sequence, will retry: {}",
+                        hash, lookup_error
+                    ));
+                }
+            }
+        }
+
+        BroadcastErrorResolution::PropagateOriginal
+    }
+
     pub async fn send_transaction(
         &mut self,
         db: &mut PostgresClient,
@@ -1313,11 +1422,54 @@ impl TransactionsQueue {
             transaction_request, self.relayer.name
         );
 
-        let transaction_hash = self
+        // sign before broadcasting so the exact broadcast hash is known even when the
+        // send response is lost or errors. a lost response followed by a transport
+        // retry surfaces as "nonce too low" for a transaction that actually mined,
+        // and without the real hash that case cannot be told apart from an external
+        // actor consuming the nonce.
+        let (attempt_hash, raw_transaction) = self
             .evm_provider
-            .send_transaction(&self.relayer, transaction_request)
+            .sign_transaction_for_broadcast(&self.relayer, transaction_request)
             .await
             .map_err(TransactionQueueSendTransactionError::TransactionSendError)?;
+
+        // the stored hash may be from an earlier broadcast attempt of this
+        // transaction, which is exactly what a nonce error needs to be checked
+        // against. the very first attempt stores the queue-time preview hash
+        // instead, and looking that up is harmless as it never mined.
+        let previous_attempt_hash =
+            transaction.known_transaction_hash.filter(|previous| previous != &attempt_hash);
+        transaction.known_transaction_hash = Some(attempt_hash);
+        self.update_pending_transaction_known_hash(&transaction.id, attempt_hash).await;
+        if let Err(db_error) =
+            db.transaction_update_known_hash(&transaction.id, &attempt_hash).await
+        {
+            error!(
+                "Failed to persist broadcast hash {} for transaction {} on relayer: {}: {}",
+                attempt_hash, transaction.id, self.relayer.name, db_error
+            );
+        }
+
+        let transaction_hash =
+            match self.evm_provider.broadcast_signed_transaction(&raw_transaction).await {
+                Ok(hash) => hash,
+                Err(error) => match self
+                    .resolve_broadcast_send_error(&error, attempt_hash, previous_attempt_hash)
+                    .await
+                {
+                    BroadcastErrorResolution::OwnTransaction(hash) => hash,
+                    BroadcastErrorResolution::Inconclusive(reason) => {
+                        return Err(TransactionQueueSendTransactionError::TransactionSendError(
+                            SendTransactionError::InternalError(reason),
+                        ));
+                    }
+                    BroadcastErrorResolution::PropagateOriginal => {
+                        return Err(TransactionQueueSendTransactionError::TransactionSendError(
+                            error,
+                        ));
+                    }
+                },
+            };
 
         let transaction_sent = TransactionSentWithRelayer {
             id: transaction.id,
@@ -1411,6 +1563,17 @@ impl TransactionsQueue {
         }
     }
 
+    pub async fn update_pending_transaction_known_hash(
+        &self,
+        transaction_id: &TransactionId,
+        hash: TransactionHash,
+    ) {
+        let mut pending = self.pending_transactions.lock().await;
+        if let Some(transaction) = pending.iter_mut().find(|tx| tx.id == *transaction_id) {
+            transaction.known_transaction_hash = Some(hash);
+        }
+    }
+
     pub async fn update_inmempool_transaction_nonce(
         &self,
         transaction_id: &TransactionId,
@@ -1424,5 +1587,50 @@ impl TransactionsQueue {
                 transaction.nonce = new_nonce;
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{classify_send_error_message, SendErrorClassification};
+
+    #[test]
+    fn classify_matches_already_known_before_nonce_phrases() {
+        assert_eq!(
+            classify_send_error_message("server returned an error response: already known"),
+            SendErrorClassification::AlreadyKnown
+        );
+    }
+
+    #[test]
+    fn classify_matches_the_production_nonce_too_low_response() {
+        // the exact shape returned by the rpc node when our own broadcast mined
+        // before the send response came back.
+        let error_msg = "Provider error: server returned an error response: error code -32000: \
+            nonce too low: address 0x1E5788cd49FCc89645f66B9345ceb7cc430B252e, tx: 32 state: 33";
+        assert_eq!(classify_send_error_message(error_msg), SendErrorClassification::NonceConsumed);
+    }
+
+    #[test]
+    fn classify_treats_unrelated_transport_errors_as_unrelated() {
+        assert_eq!(
+            classify_send_error_message("connection reset by peer"),
+            SendErrorClassification::Unrelated
+        );
+    }
+
+    #[test]
+    fn inconclusive_reconciliation_reason_never_classifies_as_a_nonce_error() {
+        // the send layer surfaces an inconclusive reconciliation as an internal
+        // error so the transaction stays pending and retries at the same nonce.
+        // if this message ever classified as NonceConsumed, the pending-queue
+        // recovery would re-assign a new nonce and double-send the payload.
+        let reason = format!(
+            "Internal error: unable to confirm whether broadcast hash {} consumed the reported \
+             stale sequence, will retry: {}",
+            "0x3b80d0d97c93a921d744728d22ca8552e86787caf1372a753aa785e471cfa7dc",
+            "transport error: connection timed out"
+        );
+        assert_eq!(classify_send_error_message(&reason), SendErrorClassification::Unrelated);
     }
 }

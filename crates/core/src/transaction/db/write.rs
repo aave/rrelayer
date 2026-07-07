@@ -469,6 +469,31 @@ impl PostgresClient {
         Ok(())
     }
 
+    /// Records the hash of the signed payload that is about to be broadcast.
+    ///
+    /// # Why
+    ///
+    /// The hash stored at queue time comes from a separate signing pass and does
+    /// not match the broadcast transaction when signing is non-deterministic.
+    /// Persisting the real hash before broadcasting means the transaction can be
+    /// found on-chain after a crash or a lost send response, instead of being
+    /// re-broadcast at a new nonce.
+    pub async fn transaction_update_known_hash(
+        &mut self,
+        transaction_id: &TransactionId,
+        hash: &TransactionHash,
+    ) -> Result<(), PostgresError> {
+        let conn = self.pool.get().await?;
+
+        conn.execute(
+            "UPDATE relayer.transaction SET hash = $2 WHERE id = $1",
+            &[&transaction_id, &hash],
+        )
+        .await?;
+
+        Ok(())
+    }
+
     pub async fn transaction_expired(
         &mut self,
         transaction_id: &TransactionId,
