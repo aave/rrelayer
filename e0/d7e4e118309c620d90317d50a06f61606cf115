@@ -1,0 +1,42 @@
+crates/core/src/transaction/queue_system/transactions_queues.rs
+  s_7fcde17cdf4769::t_ef1dcb746fdbbf 883-884
+  s_7fcde17cdf4769::t_eead2e21b88bed 1762-1763
+  s_7fcde17cdf4769::t_f208149e2e638b 1168-1169
+  s_7fcde17cdf4769::t_26bdbe70c5f98e 1511-1527
+crates/core/src/transaction/db/write.rs
+  s_7fcde17cdf4769::t_646dab814e99d7 478-496
+  s_7fcde17cdf4769::t_25c475d22d71d4 502-510,512-535
+crates/core/src/transaction/queue_system/transactions_queue.rs
+  s_7fcde17cdf4769::t_937430c5d2c719 1094-1097,1099-1102,1105,1112,1116-1126,1134-1137,1140-1141,1147,1152,1157-1160,1165
+  s_7fcde17cdf4769::t_070991254fb6ac 1127-1132
+  s_7fcde17cdf4769::t_b29d6340535d88 34
+  s_7fcde17cdf4769::t_06c99b3924933d 1026-1031,1038-1041
+  s_7fcde17cdf4769::t_4dd1ba2beababd 1425
+  s_7fcde17cdf4769::t_d9dec468f64e13 1444,1448-1457
+crates/core/src/provider/evm_provider.rs
+  s_7fcde17cdf4769::t_312b25408bb365 400,408
+  s_7fcde17cdf4769::t_865f192104b2a5 424-428
+  s_7fcde17cdf4769::t_875879f76e7fc1 380-395
+crates/core/src/transaction/queue_system/types/send_transaction_error.rs
+  s_7fcde17cdf4769::t_498cce95330092 4-7
+  s_7fcde17cdf4769::t_2ac1555b30257d 32-41
+crates/core/src/transaction/db/read.rs
+  s_7fcde17cdf4769::t_0eeb4596c4a26c 91-107
+  s_7fcde17cdf4769::t_42a35019b4e4f8 86-90,108-125
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "e0d7e4e118309c620d90317d50a06f61606cf115",
+  "prompts": {},
+  "sessions": {
+    "s_7fcde17cdf4769": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ec481dae-f69a-4574-9e21-0919acd8db70",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Jaggad <jack@turboclicks.com.au>"
+    }
+  }
+}
