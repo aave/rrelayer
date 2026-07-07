@@ -1,7 +1,10 @@
 use alloy::transports::{RpcError, TransportErrorKind};
 use thiserror::Error;
 
-use crate::{postgres::PostgresError, provider::SendTransactionError, SafeProxyError};
+use crate::{
+    postgres::PostgresError, provider::SendTransactionError, transaction::types::TransactionHash,
+    SafeProxyError,
+};
 
 #[derive(Error, Debug)]
 pub enum SendTransactionGasPriceError {
@@ -25,6 +28,16 @@ pub enum TransactionQueueSendTransactionError {
 
     #[error("Transaction send error: {0}")]
     TransactionSendError(#[from] SendTransactionError),
+
+    /// The broadcast failed with a nonce error but it could not be verified
+    /// whether one of our own earlier broadcasts consumed the nonce, for example
+    /// because the receipt lookup itself failed.
+    ///
+    /// The send must be retried later at the same nonce. Handlers must never
+    /// route this into nonce recovery, re-assigning a new nonce to a payload
+    /// that may already be on-chain executes it twice.
+    #[error("Broadcast outcome unknown for transaction hash {hash}, will retry: {reason}")]
+    BroadcastInconclusive { hash: TransactionHash, reason: String },
 
     #[error("Transaction could not be updated in DB: {0}")]
     CouldNotUpdateTransactionDb(#[from] PostgresError),
