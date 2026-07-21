@@ -63,5 +63,5 @@ tower = "0.5.2"
 subtle = "2.6.1"
 cryptoki = "0.10"
 secrecy = "0.8"
-jsonwebtoken = "10.3"
+jsonwebtoken = { version = "10.3", features = ["rust_crypto"] }
 rsa = "0.9"
