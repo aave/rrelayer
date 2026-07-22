@@ -65,11 +65,8 @@ impl HttpClient {
         }
     }
 
-    /// Validates the response status, reading the body into
-    /// [`ApiSdkError::ApiError`] on any other non-2xx status *before* it
-    /// would otherwise be discarded by `reqwest::Response::error_for_status`
-    /// — the caller's only chance to see the server's actual reason text
-    /// (e.g. a `bad_request(...)` message) rather than a bare status line.
+    /// Validates the response status, reading the body into [`ApiSdkError::ApiError`]
+    /// on any other non-2xx status *before* it would otherwise be discarded.
     async fn check_response(&self, response: reqwest::Response) -> ApiResult<reqwest::Response> {
         self.handle_response_status(&response)?;
         if !response.status().is_success() {

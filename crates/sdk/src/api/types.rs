@@ -17,10 +17,6 @@ pub enum ApiSdkError {
     #[error("HTTP client error: {0}")]
     HttpError(#[from] reqwest::Error),
 
-    /// A non-2xx response whose body was successfully read. Carries the
-    /// server's actual error message (e.g. a `bad_request(...)` reason)
-    /// rather than the bare status line `reqwest::Error` would otherwise
-    /// produce once `error_for_status()` has already dropped the body.
     #[error("API error ({status}): {message}")]
     ApiError { status: u16, message: String },
 
