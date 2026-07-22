@@ -17,6 +17,9 @@ pub enum ApiSdkError {
     #[error("HTTP client error: {0}")]
     HttpError(#[from] reqwest::Error),
 
+    #[error("API error ({status}): {message}")]
+    ApiError { status: u16, message: String },
+
     #[error("Invalid configuration: {0}")]
     ConfigError(String),
 
