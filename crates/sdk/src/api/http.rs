@@ -65,6 +65,21 @@ impl HttpClient {
         }
     }
 
+    /// Validates the response status, reading the body into
+    /// [`ApiSdkError::ApiError`] on any other non-2xx status *before* it
+    /// would otherwise be discarded by `reqwest::Response::error_for_status`
+    /// — the caller's only chance to see the server's actual reason text
+    /// (e.g. a `bad_request(...)` message) rather than a bare status line.
+    async fn check_response(&self, response: reqwest::Response) -> ApiResult<reqwest::Response> {
+        self.handle_response_status(&response)?;
+        if !response.status().is_success() {
+            let status = response.status().as_u16();
+            let message = response.text().await.unwrap_or_default();
+            return Err(ApiSdkError::ApiError { status, message });
+        }
+        Ok(response)
+    }
+
     pub async fn get<T>(&self, endpoint: &str) -> ApiResult<T>
     where
         T: DeserializeOwned,
@@ -73,8 +88,7 @@ impl HttpClient {
         let headers = self.build_headers(None);
 
         let response = self.client.get(&url).headers(headers).send().await?;
-        self.handle_response_status(&response)?;
-        let response = response.error_for_status()?;
+        let response = self.check_response(response).await?;
 
         Ok(response.json::<T>().await?)
     }
@@ -92,8 +106,7 @@ impl HttpClient {
             return Ok(None);
         }
 
-        self.handle_response_status(&response)?;
-        let response = response.error_for_status()?;
+        let response = self.check_response(response).await?;
         let data = response.json::<T>().await?;
         Ok(Some(data))
     }
@@ -112,8 +125,7 @@ impl HttpClient {
         }
 
         let response = request.send().await?;
-        self.handle_response_status(&response)?;
-        let response = response.error_for_status()?;
+        let response = self.check_response(response).await?;
         Ok(response.json().await?)
     }
 
@@ -126,8 +138,7 @@ impl HttpClient {
         let headers = self.build_headers(None);
 
         let response = self.client.post(&url).headers(headers).json(body).send().await?;
-        self.handle_response_status(&response)?;
-        let response = response.error_for_status()?;
+        let response = self.check_response(response).await?;
 
         Ok(response.json::<T>().await?)
     }
@@ -146,8 +157,7 @@ impl HttpClient {
         let headers = self.build_headers(Some(headers));
 
         let response = self.client.post(&url).headers(headers).json(body).send().await?;
-        self.handle_response_status(&response)?;
-        let response = response.error_for_status()?;
+        let response = self.check_response(response).await?;
 
         Ok(response.json::<T>().await?)
     }
@@ -160,8 +170,7 @@ impl HttpClient {
         let headers = self.build_headers(None);
 
         let response = self.client.post(&url).headers(headers).json(body).send().await?;
-        self.handle_response_status(&response)?;
-        response.error_for_status()?;
+        self.check_response(response).await?;
 
         Ok(())
     }
@@ -175,8 +184,7 @@ impl HttpClient {
         let headers = self.build_headers(None);
 
         let response = self.client.put(&url).headers(headers).json(body).send().await?;
-        self.handle_response_status(&response)?;
-        let response = response.error_for_status()?;
+        let response = self.check_response(response).await?;
 
         Ok(response.json().await?)
     }
@@ -195,8 +203,7 @@ impl HttpClient {
         let headers = self.build_headers(Some(headers));
 
         let response = self.client.put(&url).headers(headers).json(body).send().await?;
-        self.handle_response_status(&response)?;
-        let response = response.error_for_status()?;
+        let response = self.check_response(response).await?;
 
         Ok(response.json::<T>().await?)
     }
@@ -209,8 +216,7 @@ impl HttpClient {
         let headers = self.build_headers(None);
 
         let response = self.client.put(&url).headers(headers).json(body).send().await?;
-        self.handle_response_status(&response)?;
-        response.error_for_status()?;
+        self.check_response(response).await?;
 
         Ok(())
     }
@@ -223,8 +229,7 @@ impl HttpClient {
         let headers = self.build_headers(None);
 
         let response = self.client.delete(&url).headers(headers).send().await?;
-        self.handle_response_status(&response)?;
-        let response = response.error_for_status()?;
+        let response = self.check_response(response).await?;
 
         Ok(response.json().await?)
     }
@@ -234,8 +239,7 @@ impl HttpClient {
         let headers = self.build_headers(None);
 
         let response = self.client.delete(&url).headers(headers).send().await?;
-        self.handle_response_status(&response)?;
-        response.error_for_status()?;
+        self.check_response(response).await?;
 
         Ok(())
     }
@@ -249,8 +253,7 @@ impl HttpClient {
         let headers = self.build_headers(None);
 
         let response = self.client.delete(&url).headers(headers).json(body).send().await?;
-        self.handle_response_status(&response)?;
-        let response = response.error_for_status()?;
+        let response = self.check_response(response).await?;
 
         Ok(response.json().await?)
     }
@@ -260,8 +263,7 @@ impl HttpClient {
         let headers = self.build_headers(None);
 
         let response = self.client.get(&url).headers(headers).send().await?;
-        self.handle_response_status(&response)?;
-        response.error_for_status()?;
+        self.check_response(response).await?;
 
         Ok(())
     }
