@@ -1,0 +1,20 @@
+crates/core/src/transaction/queue_system/transactions_queues.rs
+  s_d840b5d368c891::t_4253af1155ee27 286,293-309,2141-2146,2149-2161
+  s_d840b5d368c891::t_d6f7ffe29d721a 2101-2102,2115,2119,2147-2148,2162
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.4",
+  "base_commit_sha": "528ba5b79d1e777b7a3c324397ace34bf1a16a48",
+  "prompts": {},
+  "sessions": {
+    "s_d840b5d368c891": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019e18f5-96db-7d23-ac0e-80db4b7a1806",
+        "model": "gpt-5.5"
+      },
+      "human_author": "Alpay Aldemir <aldemir.alpay@gmail.com>"
+    }
+  }
+}

@@ -1,0 +1,22 @@
+crates/sdk/src/api/types.rs
+  s_0055813839872c::t_e7f5101bd60676 20-26
+crates/sdk/src/api/http.rs
+  s_0055813839872c::t_ff01c3b283a0e8 68-82,91,256
+  s_0055813839872c::t_2c10b0d3e66b37 109,128,141,160,173,187,206,219,232,242,266
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "a64b2a1d9f9e5a386b344f3aa4b402e19003b13d",
+  "prompts": {},
+  "sessions": {
+    "s_0055813839872c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ec836b79-7ae9-4bda-8a6c-5141361e5795",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Jaggad <jack@turboclicks.com.au>"
+    }
+  }
+}

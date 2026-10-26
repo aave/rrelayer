@@ -1,0 +1,22 @@
+documentation/rrelayer/docs/pages/integration/api/transactions.mdx
+  s_e003baa11c4814::t_ef27cc756de7d7 52-62,141-142
+  s_e003baa11c4814::t_5958f3de38a98c 140
+crates/core/src/transaction/queue_system/transactions_queues.rs
+  s_e003baa11c4814::t_ef27cc756de7d7 286-287,304-307,2134,2145-2146,2150,2152-2155
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.4",
+  "base_commit_sha": "6a4d271f85e57cf44a1b8a27cb0f7d3a87b495ca",
+  "prompts": {},
+  "sessions": {
+    "s_e003baa11c4814": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019e1d96-6b7b-7d21-8c67-42be507e072b",
+        "model": "gpt-5.5"
+      },
+      "human_author": "Alpay Aldemir <aldemir.alpay@gmail.com>"
+    }
+  }
+}
