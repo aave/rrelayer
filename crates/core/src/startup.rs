@@ -37,7 +37,7 @@ use axum::{
     routing::get,
     Json, Router,
 };
-use dotenv::dotenv;
+use dotenvy::dotenv;
 use rustls::crypto::ring::default_provider;
 use rustls::crypto::CryptoProvider;
 use std::collections::HashMap;
@@ -157,6 +157,17 @@ async fn activity_logger(req: Request<Body>, next: Next) -> Result<Response, Sta
     }
 }
 
+fn api_routes() -> Router<Arc<AppState>> {
+    // all routes handle their own authentication logic internally.
+    Router::new()
+        .route("/health", get(health_check))
+        .nest("/auth", create_basic_auth_routes())
+        .nest("/networks", create_network_routes())
+        .nest("/relayers", create_relayer_routes())
+        .nest("/transactions", create_transactions_routes())
+        .nest("/signing", create_signing_routes())
+}
+
 #[allow(clippy::too_many_arguments)]
 async fn start_api(
     api_config: ApiConfig,
@@ -244,17 +255,7 @@ async fn start_api(
         .allow_methods(Any)
         .allow_headers(Any);
 
-    // All routes handle their own authentication logic internally
-    let api_routes = Router::new()
-        .nest("/auth", create_basic_auth_routes())
-        .nest("/networks", create_network_routes())
-        .nest("/relayers", create_relayer_routes())
-        .nest("/transactions", create_transactions_routes())
-        .nest("/signing", create_signing_routes());
-
-    let app = Router::new()
-        .route("/health", get(health_check))
-        .merge(api_routes)
+    let app = api_routes()
         .layer(middleware::from_fn(inject_basic_auth_status))
         .layer(middleware::from_fn(activity_logger))
         .layer(cors)
@@ -514,4 +515,14 @@ pub async fn start(project_path: &Path) -> Result<(), StartError> {
     .await?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn api_routes_register_without_panicking() {
+        let _ = api_routes();
+    }
 }
