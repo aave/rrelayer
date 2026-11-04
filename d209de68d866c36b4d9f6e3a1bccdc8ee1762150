@@ -1,0 +1,31 @@
+crates/core/Cargo.toml
+  s_f701151b34795b::t_9c1c160145d225 21-23,70-73
+crates/core/README.md
+  s_f701151b34795b::t_1ad51b8a27bb8e 19-29
+crates/core/src/lib.rs
+  s_f701151b34795b::t_29f08905859dc9 11
+crates/core/src/postgres.rs
+  s_f701151b34795b::t_56e81b45f9981c 1-2,8-9,13,38-40,58-84,94-96,102,108-113,119-122,132-136,138,144-145,149,174,181,248,323-350
+crates/core/src/postgres/connection.rs
+  s_f701151b34795b::t_3ac1efc3e9fcdd 1-293
+crates/core/src/postgres/connection_transport_tests.rs
+  s_f701151b34795b::t_40de655d1a55a1 1-176
+documentation/rrelayer/docs/pages/changelog.mdx
+  s_f701151b34795b::t_b5280fc9b4cda2 9-10,21-22
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "d209de68d866c36b4d9f6e3a1bccdc8ee1762150",
+  "prompts": {},
+  "sessions": {
+    "s_f701151b34795b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a16286-41ca-74f2-b898-441badf41c52",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "euugeenee <eugene@aave.com>"
+    }
+  }
+}
