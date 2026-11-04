@@ -1,0 +1,21 @@
+crates/core/src/transaction/queue_system/transactions_queue.rs
+  s_5713b2809c511e::t_54589be97976dd 269,497
+crates/core/src/transaction/queue_system/transactions_queues.rs
+  s_5713b2809c511e::t_46c77cec14e1a3 1302,1611,1877
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "92ed1ce3882434b9a2bc34c981d056535206d96c",
+  "prompts": {},
+  "sessions": {
+    "s_5713b2809c511e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "fcaa2784-6054-48c2-bd3a-51181478eff5",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Jaggad <jack@aave.com>"
+    }
+  }
+}
