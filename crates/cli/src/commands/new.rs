@@ -3,14 +3,13 @@ use std::{fs, path::Path};
 use crate::project_location::ProjectLocation;
 use crate::{commands::error::InitError, print_error_message, print_success_message};
 use dialoguer::{Confirm, Input};
-use rand::Rng;
-use rand::distributions::Alphanumeric;
+use rand::RngExt;
+use rand::distr::Alphanumeric;
 use rrelayer_core::network::ChainId;
 use rrelayer_core::{
     ApiConfig, NetworkSetupConfig, RawSigningProviderConfig, SetupConfig, SigningProvider,
     WriteFileError, generate_docker_file, generate_seed_phrase, write_file,
 };
-use serde_yaml;
 
 fn write_docker_compose(path: &Path) -> Result<(), WriteFileError> {
     write_file(&path.join("docker-compose.yml"), generate_docker_file())
@@ -25,11 +24,10 @@ fn write_gitignore(path: &Path) -> Result<(), WriteFileError> {
 }
 
 fn generate_random_credentials() -> (String, String) {
-    let username: String =
-        rand::thread_rng().sample_iter(&Alphanumeric).take(8).map(char::from).collect();
+    let username: String = rand::rng().sample_iter(&Alphanumeric).take(8).map(char::from).collect();
 
     let password: String =
-        rand::thread_rng().sample_iter(&Alphanumeric).take(16).map(char::from).collect();
+        rand::rng().sample_iter(&Alphanumeric).take(16).map(char::from).collect();
 
     (format!("development_username_{}", username), format!("development_password_{}", password))
 }
@@ -87,7 +85,7 @@ pub async fn handle_init(path: &Path) -> Result<(), InitError> {
         webhooks: None,
         rate_limits: None,
     };
-    fs::write(project_path.join("rrelayer.yaml"), serde_yaml::to_string(&yaml_content)?)?;
+    fs::write(project_path.join("rrelayer.yaml"), serde_norway::to_string(&yaml_content)?)?;
 
     let phrase = generate_seed_phrase()?;
 

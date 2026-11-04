@@ -266,6 +266,7 @@ impl TransactionsQueue {
         }
     }
 
+    #[allow(clippy::result_large_err)]
     pub async fn move_pending_to_inmempool(
         &mut self,
         transaction_sent: &TransactionSentWithRelayer,
@@ -493,6 +494,7 @@ impl TransactionsQueue {
         }
     }
 
+    #[allow(clippy::result_large_err)]
     pub async fn move_inmempool_to_mining(
         &mut self,
         id: &TransactionId,

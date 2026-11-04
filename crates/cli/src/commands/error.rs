@@ -12,7 +12,7 @@ pub enum ProjectLocationError {
     Io(#[from] std::io::Error),
 
     #[error("YAML serialization error: {0}")]
-    Yaml(#[from] serde_yaml::Error),
+    Yaml(#[from] serde_norway::Error),
 }
 
 #[derive(Error, Debug)]
@@ -187,7 +187,7 @@ pub enum InitError {
     ConfigWrite(#[from] rrelayer_core::WriteFileError),
 
     #[error("YAML error: {0}")]
-    Yaml(#[from] serde_yaml::Error),
+    Yaml(#[from] serde_norway::Error),
 
     #[error("Terminal interaction failed: {0}")]
     Terminal(#[from] dialoguer::Error),
@@ -205,7 +205,7 @@ pub enum ConfigError {
     Invalid(String),
 
     #[error("YAML error: {0}")]
-    Yaml(#[from] serde_yaml::Error),
+    Yaml(#[from] serde_norway::Error),
 
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),

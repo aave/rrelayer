@@ -7,7 +7,6 @@ use alloy::{
     sol,
 };
 use anyhow::{Context, Result};
-use rand;
 use rrelayer_core::common_types::EvmAddress;
 use tracing::info;
 

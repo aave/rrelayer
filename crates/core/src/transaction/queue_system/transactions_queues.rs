@@ -1299,6 +1299,7 @@ impl TransactionsQueues {
         Ok(())
     }
 
+    #[allow(clippy::result_large_err)]
     pub async fn process_single_pending(
         &mut self,
         relayer_id: &RelayerId,
@@ -1607,6 +1608,7 @@ impl TransactionsQueues {
     }
 
     /// Processes a single in-mempool transaction for the specified relayer.
+    #[allow(clippy::result_large_err)]
     pub async fn process_single_inmempool(
         &mut self,
         relayer_id: &RelayerId,
@@ -1872,6 +1874,7 @@ impl TransactionsQueues {
     }
 
     /// Processes a single mined transaction for the specified relayer.
+    #[allow(clippy::result_large_err)]
     pub async fn process_single_mined(
         &mut self,
         relayer_id: &RelayerId,

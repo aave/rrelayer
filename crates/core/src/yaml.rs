@@ -979,7 +979,7 @@ pub fn read(file_path: &PathBuf, raw_yaml: bool) -> Result<SetupConfig, ReadYaml
     let substituted_contents =
         if raw_yaml { contents } else { substitute_env_variables(&contents)? };
 
-    let config: SetupConfig = serde_yaml::from_str(&substituted_contents)
+    let config: SetupConfig = serde_norway::from_str(&substituted_contents)
         .map_err(|e| ReadYamlError::SetupConfigInvalidYaml(e.to_string()))?;
 
     if config.networks.is_empty() {

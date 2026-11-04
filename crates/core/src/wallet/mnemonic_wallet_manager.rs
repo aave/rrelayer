@@ -7,13 +7,12 @@ use alloy::network::TxSigner;
 use alloy::primitives::Signature;
 use alloy::signers::{
     local::{
-        coins_bip39::{English, Mnemonic},
+        coins_bip39::{English, Entropy, Mnemonic},
         LocalSignerError, MnemonicBuilder, PrivateKeySigner,
     },
     Signer,
 };
 use async_trait::async_trait;
-use rand::thread_rng;
 use std::collections::HashMap;
 use tokio::sync::Mutex;
 
@@ -139,9 +138,22 @@ impl WalletManagerTrait for MnemonicWalletManager {
 
 /// Generates a new 24-word BIP39 mnemonic seed phrase.
 pub fn generate_seed_phrase() -> Result<String, WalletError> {
-    let mut rng = thread_rng();
-    let mnemonic = Mnemonic::<English>::new_with_count(&mut rng, 24)
-        .map_err(|e| WalletError::MnemonicError(format!("Failed to generate mnemonic: {}", e)))?;
+    // 32 bytes of entropy is a 24-word phrase.
+    let entropy: [u8; 32] = rand::random();
+    let mnemonic = Mnemonic::<English>::new_from_entropy(Entropy::from(entropy));
     let phrase = mnemonic.to_phrase();
     Ok(phrase)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn generate_seed_phrase_yields_a_valid_24_word_mnemonic() {
+        let phrase = generate_seed_phrase().expect("seed phrase generation is infallible");
+
+        assert_eq!(phrase.split_whitespace().count(), 24);
+        assert!(Mnemonic::<English>::new_from_phrase(&phrase).is_ok());
+    }
 }

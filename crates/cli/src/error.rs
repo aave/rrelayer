@@ -66,7 +66,7 @@ pub enum CliError {
     SdkApi(#[from] rrelayer::ApiSdkError),
 
     #[error("YAML serialization error: {0}")]
-    Yaml(#[from] serde_yaml::Error),
+    Yaml(#[from] serde_norway::Error),
 
     #[error("Core write error: {0}")]
     CoreWrite(#[from] rrelayer_core::WriteFileError),

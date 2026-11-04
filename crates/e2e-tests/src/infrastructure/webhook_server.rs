@@ -51,26 +51,28 @@ impl WebhookTestServer {
 
         info!("Starting webhook test server on port {}", port);
 
-        let webhook_route = warp::path("webhook")
+        // borrowed `&str` path segments and replies make warp 0.4's server future fail the
+        // `Send` bound of the caller's `tokio::spawn`, so these use `path!` and an owned reply.
+        let webhook_route = warp::path!("webhook" / ..)
             .and(warp::post())
             .and(warp::header::headers_cloned())
             .and(warp::body::json())
             .and(warp::any().map(move || server.clone()))
             .and_then(handle_webhook);
 
-        let health_route = warp::path("health").and(warp::get()).map(|| "OK");
+        let health_route = warp::path!("health" / ..).and(warp::get()).map(|| "OK".to_string());
 
         let routes = webhook_route.or(health_route);
 
-        let (_, server_future) =
-            warp::serve(routes).bind_with_graceful_shutdown(([127, 0, 0, 1], port), async {
+        let server_future =
+            warp::serve(routes).bind(([127, 0, 0, 1], port)).await.graceful(async {
                 info!("[WAIT] Webhook server waiting for shutdown signal...");
                 shutdown_rx.await.ok();
                 info!("📡 Webhook server received shutdown signal");
             });
 
         info!("Webhook test server started on http://localhost:{}", port);
-        server_future.await;
+        server_future.run().await;
         info!("Webhook test server stopped");
 
         Ok(())
@@ -148,7 +150,7 @@ impl WebhookTestServer {
 
     #[allow(dead_code)]
     fn verify_signature(&self, payload: &serde_json::Value, signature: &str) -> bool {
-        use hmac::{Hmac, Mac};
+        use hmac::{Hmac, KeyInit, Mac};
         use sha2::Sha256;
 
         type HmacSha256 = Hmac<Sha256>;
@@ -174,7 +176,7 @@ impl WebhookTestServer {
 }
 
 async fn handle_webhook(
-    headers: warp::hyper::HeaderMap,
+    headers: warp::http::HeaderMap,
     payload: serde_json::Value,
     server: WebhookTestServer,
 ) -> Result<impl Reply, Rejection> {
